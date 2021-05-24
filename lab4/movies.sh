@@ -13,12 +13,12 @@ function print_help () {
 }
 
 function print_error () {
-    echo -e "\e[31m\033[1m${@}\033[0m" >&2
+    echo -e "\e[31m\033[1m${*}\033[0m" >&2
 }
 
 function get_movies_list () {
     local -r MOVIES_DIR=${1}
-    local -r MOVIES_LIST=$(cd "${MOVIES_DIR}" && realpath *)
+    local -r MOVIES_LIST=$(cd "${MOVIES_DIR}" && realpath ./*)
     echo "${MOVIES_LIST}"
 }
 
@@ -29,8 +29,8 @@ function query_title () {
 
     local RESULTS_LIST=()
     for MOVIE_FILE in ${MOVIES_LIST}; do
-        if grep "| Title" ${MOVIE_FILE} | grep -q "${QUERY}"; then
-            RESULTS_LIST+=( ${MOVIE_FILE} )
+        if grep "| Title" "${MOVIE_FILE}" | grep -q "${QUERY}"; then
+            RESULTS_LIST+=( "${MOVIE_FILE}" )
         fi
     done
     echo "${RESULTS_LIST[@]:-}"
@@ -43,8 +43,8 @@ function query_actor () {
 
     local RESULTS_LIST=()
     for MOVIE_FILE in ${MOVIES_LIST}; do
-        if grep "| Actors" ${MOVIE_FILE} | grep -q "${QUERY}"; then
-            RESULTS_LIST+=( ${MOVIE_FILE} )
+        if grep "| Actors" "${MOVIE_FILE}" | grep -q "${QUERY}"; then
+            RESULTS_LIST+=( "${MOVIE_FILE}" )
         fi
     done
     echo "${RESULTS_LIST[@]:-}"
@@ -53,8 +53,9 @@ function query_actor () {
 # Dokończ funkcję “print_xml_format”
 function print_xml_format () {
     local -r FILENAME=${1}
-
-    local TEMP=$(cat "${FILENAME}")
+    local TEMP
+    
+    TEMP=$(cat "${FILENAME}")
 
     # TODO: replace first line of equals signs
     TEMP="${TEMP//==================================================/<movie>}"
@@ -73,16 +74,17 @@ function print_xml_format () {
     TEMP="${TEMP//| Plot: /<Plot>}"
 
     # append tag after each line
-    TEMP=$(echo "${TEMP}" | sed -r 's/([A-Za-z]+).*/\0<\/\1>/')
+    TEMP=$(echo "${TEMP}" | sed -r '3,13s/([A-Za-z]+).*/\0<\/\1>/')
 
     # replace the last line with </movie>
-    TEMP=$(echo "${TEMP}" | sed '$s/===*/<\/movie>/')
+    TEMP=$(echo "${TEMP}" | sed -r '$s/===*/<\/movie>/')
+    TEMP="${TEMP//<movie><\/movie>/<\/movie>}"
 
     echo "${TEMP}"
 }
 
 function print_movies () {
-    local -r MOVIES_LIST=$(echo "${1}")
+    local -r MOVIES_LIST="${1}"
     local -r OUTPUT_FORMAT=${2}    
 
     for MOVIE_FILE in ${MOVIES_LIST}; do
@@ -113,7 +115,7 @@ function query_year () {
         YEAR_LINE=$(grep "| Year" "${MOVIE_FILE}")
         YEAR=${YEAR_LINE##*Year: }
         if [[ ${YEAR} > ${QUERY} ]]; then
-            RESULTS_LIST+=( ${MOVIE_FILE} )
+            RESULTS_LIST+=( "${MOVIE_FILE}" )
         fi
     done
     echo "${RESULTS_LIST[@]:-}"
@@ -128,19 +130,18 @@ function query_plot () {
     local RESULTS_LIST=()
     for MOVIE_FILE in ${MOVIES_LIST}; do
         if [[ "${IS_I_FLAG_USED}" == false ]]; then
-            if grep "| Plot" ${MOVIE_FILE} | grep -qE "${QUERY}"; then
-                RESULTS_LIST+=( ${MOVIE_FILE} )
+            if grep "| Plot" "${MOVIE_FILE}" | grep -qE "${QUERY}"; then
+                RESULTS_LIST+=( "${MOVIE_FILE}" )
             fi
         else
-            if grep "| Plot" ${MOVIE_FILE} | grep -qiE "${QUERY}"; then
-                RESULTS_LIST+=( ${MOVIE_FILE} )
+            if grep "| Plot" "${MOVIE_FILE}" | grep -qiE "${QUERY}"; then
+                RESULTS_LIST+=( "${MOVIE_FILE}" )
             fi
         fi
     done
     echo "${RESULTS_LIST[@]:-}"
 }
 
-ANY_ERRORS=false
 IS_D_FLAG_USED=false
 IS_I_FLAG_USED=false
 
@@ -168,21 +169,19 @@ while getopts ":hd:t:a:y:r:i:f:x" OPT; do
         ;;
     i)
         IS_I_FLAG_USED=true
-        HALO=${OPTARG}
         ;;
     f)
         FILE_4_SAVING_RESULTS=${OPTARG}
         ;;
     a)
         SEARCHING_ACTOR=true
-        QUERY_ACTOR=$( echo "${OPTARG}")
+        QUERY_ACTOR="${OPTARG}"
         ;;
     x)
         OUTPUT_FORMAT="xml"
         ;;
     \?)
         print_error "ERROR: Invalid option: -${OPTARG}"
-        ANY_ERRORS=true
         exit 1
         ;;
   esac
@@ -214,7 +213,7 @@ else
             MOVIES_LIST=$(query_plot "${MOVIES_LIST}" "${QUERY_PLOT}")
         fi
 
-        if [[ "${#MOVIES_LIST}" < 1 ]]; then
+        if [[ "${#MOVIES_LIST}" -lt 1 ]]; then
             echo "Found 0 movies :-("
             exit 0
         fi
